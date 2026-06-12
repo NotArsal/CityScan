@@ -10,6 +10,7 @@ import LocationCard from "@/components/LocationCard";
 import VoiceRecorder from "@/components/VoiceRecorder";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, CheckCircle2, QrCode } from "lucide-react";
+import { API_BASE_URL } from "@/config";
 
 /* ✅ Proper Type for GPS Data */
 interface LocationData {
@@ -72,7 +73,7 @@ const ReportIssue = () => {
       setIsSubmitting(true);
 
       const response = await fetch(
-        "https://public-eye-backend.onrender.com/api/complaints",
+        `${API_BASE_URL}/api/complaints`,
         {
           method: "POST",
           headers: {

@@ -1,7 +1,7 @@
 import { QRCodeCanvas } from "qrcode.react";
 
 const GenerateQR = () => {
-  const url = "http://localhost:5173/report?zone=WARD12";
+  const url = "http://localhost:8080/report?zone=WARD12";
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen space-y-6">

@@ -4,22 +4,21 @@ const cors = require("cors");
 require("dotenv").config();
 
 
-const complaintRoutes = require("./routes/complaintRoutes");
-
 const app = express();
-const rewardRoutes = require("./routes/rewardRoutes");
-app.use("/api/rewards", rewardRoutes);
-const locationRoutes = require("./routes/locationRoutes");
-app.use("/api/location", locationRoutes);
-
-
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Routes
+// Route imports
+const complaintRoutes = require("./routes/complaintRoutes");
+const rewardRoutes = require("./routes/rewardRoutes");
+const locationRoutes = require("./routes/locationRoutes");
+
+// Route registrations
 app.use("/api/complaints", complaintRoutes);
+app.use("/api/rewards", rewardRoutes);
+app.use("/api/location", locationRoutes);
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)

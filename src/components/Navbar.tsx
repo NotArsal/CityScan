@@ -61,7 +61,7 @@ const Navbar = () => {
               <Link to="/report">Report Issue</Link>
             </Button>
             <Button asChild variant="ghost">
-            <a href="/rewards">Rewards</a>
+              <Link to="/rewards">Rewards</Link>
             </Button>
 
           </div>

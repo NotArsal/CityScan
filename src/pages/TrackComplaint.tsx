@@ -11,6 +11,8 @@ import {
   AlertCircle,
   Timer
 } from "lucide-react";
+import { API_BASE_URL } from "@/config";
+
 
 interface LocationData {
   address: string;
@@ -65,7 +67,7 @@ const TrackComplaint = () => {
 
     try {
       const response = await fetch(
-        `https://public-eye-backend.onrender.com/api/complaints/${complaintId.trim()}`
+        `${API_BASE_URL}/api/complaints/${complaintId.trim()}`
       );
 
       if (!response.ok) {
@@ -89,7 +91,7 @@ const TrackComplaint = () => {
 
     try {
       await fetch(
-        `https://public-eye-backend.onrender.com/api/complaints/${complaintData?.complaintId}/feedback`,
+        `${API_BASE_URL}/api/complaints/${complaintData?.complaintId}/feedback`,
         {
           method: "POST",
           headers: {

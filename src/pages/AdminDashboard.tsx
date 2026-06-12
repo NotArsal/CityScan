@@ -13,6 +13,8 @@ import {
   Clock,
   CheckCircle2
 } from "lucide-react";
+import { API_BASE_URL } from "@/config";
+
 
 interface BackendComplaint {
   _id: string;
@@ -39,7 +41,7 @@ const AdminDashboard = () => {
 
   // 🔥 Fetch complaints
   useEffect(() => {
-    fetch("https://public-eye-backend.onrender.com/api/complaints")
+    fetch(`${API_BASE_URL}/api/complaints`)
       .then(res => res.json())
       .then(data => {
         setBackendComplaints(Array.isArray(data) ? data : []);
@@ -94,7 +96,7 @@ const AdminDashboard = () => {
     if (!updateComplaint) return;
 
     await fetch(
-      `https://public-eye-backend.onrender.com/api/complaints/${updateComplaint.id}`,
+      `${API_BASE_URL}/api/complaints/${updateComplaint.id}`,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },

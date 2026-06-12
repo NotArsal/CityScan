@@ -16,6 +16,8 @@ import {
   ArrowRight
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { API_BASE_URL } from "@/config";
+
 
 interface Complaint {
   complaintId: string;
@@ -42,7 +44,7 @@ const ConfirmationPage = () => {
   useEffect(() => {
     if (!complaintId) return;
 
-    fetch(`https://public-eye-backend.onrender.com/api/complaints/${complaintId}`)
+    fetch(`${API_BASE_URL}/api/complaints/${complaintId}`)
       .then(res => res.json())
       .then(data => {
         setComplaintData(data);

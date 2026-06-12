@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import { API_BASE_URL } from "@/config";
+
 
 const Rewards = () => {
   const [points, setPoints] = useState<number>(0);
@@ -15,7 +17,7 @@ const Rewards = () => {
   const fetchPoints = async () => {
     try {
       const res = await fetch(
-        `https://public-eye-backend.onrender.com/api/rewards/${firebaseUid}`
+        `${API_BASE_URL}/api/rewards/${firebaseUid}`
       );
       const data = await res.json();
       setPoints(data.points || 0);
@@ -38,7 +40,7 @@ const Rewards = () => {
 
     try {
       const res = await fetch(
-        `https://public-eye-backend.onrender.com/api/rewards/claim`,
+        `${API_BASE_URL}/api/rewards/claim`,
         {
           method: "POST",
           headers: {
