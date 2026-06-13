@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import LocationCard from "@/components/LocationCard";
+import { API_BASE_URL } from "../config";
 import { 
   FileText, 
   MapPin, 
@@ -22,6 +23,7 @@ import {
 const Home = () => {
   const [location, setLocation] = useState<string>("Detecting location...");
   const [timestamp, setTimestamp] = useState<string>("");
+  const [overviewStats, setOverviewStats] = useState<any>(null);
 
   useEffect(() => {
     setTimestamp(new Date().toLocaleString());
@@ -29,19 +31,13 @@ const Home = () => {
     const updateLocationFromCoords = async (latitude: number, longitude: number) => {
       try {
         const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`,
-          {
-            headers: {
-              // Best-effort identification; some providers prefer a proper UA/Referer
-              "Accept": "application/json"
-            }
-          }
+          `${API_BASE_URL}/api/location/reverse?lat=${latitude}&lon=${longitude}`
         );
         if (!response.ok) {
           throw new Error("Reverse geocoding failed");
         }
         const data = await response.json();
-        const displayName: string | undefined = data?.display_name;
+        const displayName: string | undefined = data?.address;
         if (displayName && displayName.length > 0) {
           setLocation(displayName);
         } else {
@@ -86,7 +82,20 @@ const Home = () => {
       );
     };
 
+    const fetchOverviewStats = async () => {
+      try {
+        const res = await fetch(`${API_BASE_URL}/api/stats/overview`);
+        if (res.ok) {
+          const data = await res.json();
+          setOverviewStats(data);
+        }
+      } catch (err) {
+        console.error("Error fetching overview stats:", err);
+      }
+    };
+
     requestGeolocation();
+    fetchOverviewStats();
   }, []);
 
   const features = [
@@ -117,10 +126,10 @@ const Home = () => {
   ];
 
   const stats = [
-    { label: "Total Complaints", value: "12,847", icon: FileText, trend: "+8%" },
-    { label: "Resolved This Month", value: "3,245", icon: CheckCircle, trend: "+15%" },
-    { label: "In Progress", value: "892", icon: Clock, trend: "-5%" },
-    { label: "Active Cities", value: "156", icon: MapPin, trend: "+12%" }
+    { label: "Total Complaints", value: overviewStats ? overviewStats.total.toLocaleString() : "...", icon: FileText, trend: "Live" },
+    { label: "Resolved Complaints", value: overviewStats ? overviewStats.resolved.toLocaleString() : "...", icon: CheckCircle, trend: "Live" },
+    { label: "In Progress", value: overviewStats ? overviewStats.inProgress.toLocaleString() : "...", icon: Clock, trend: "Live" },
+    { label: "Resolution Rate", value: overviewStats ? `${overviewStats.resolutionRate}%` : "...", icon: Shield, trend: "Live" }
   ];
 
   return (

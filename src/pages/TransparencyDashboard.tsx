@@ -1,405 +1,348 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
+import { API_BASE_URL } from "../config";
 import { 
-  MapPin, 
+  Building, 
   BarChart3, 
-  Users, 
-  TrendingUp, 
+  MapPin, 
   Clock, 
   CheckCircle2, 
   AlertTriangle,
-  Building,
+  Activity,
+  Shield,
   Eye,
-  Shield
+  RefreshCw,
+  FolderOpen
 } from "lucide-react";
+import { toast } from "sonner";
 
-const TransparencyDashboard = () => {
-  const [selectedView, setSelectedView] = useState("national");
-  const [selectedState, setSelectedState] = useState("all");
+interface OverviewStats {
+  total: number;
+  pending: number;
+  inProgress: number;
+  resolved: number;
+  rejected: number;
+  resolutionRate: number;
+}
 
-  // Mock data for different levels
-  const nationalStats = {
-    totalComplaints: 45623,
-    pending: 4562,
-    inProgress: 8934,
-    resolved: 32127,
-    activeCities: 156,
-    activeStates: 28
-  };
+interface ZoneStat {
+  zone: string;
+  total: number;
+  resolved: number;
+  pending: number;
+}
 
-  const stateData = [
-    { 
-      state: "Delhi", 
-      total: 8456, 
-      pending: 534, 
-      inProgress: 1234, 
-      resolved: 6688, 
-      cities: 12,
-      trend: "+8%",
-      level: "High"
-    },
-    { 
-      state: "Maharashtra", 
-      total: 7234, 
-      pending: 423, 
-      inProgress: 1876, 
-      resolved: 4935, 
-      cities: 24,
-      trend: "+12%",
-      level: "High"
-    },
-    { 
-      state: "Karnataka", 
-      total: 5678, 
-      pending: 345, 
-      inProgress: 1234, 
-      resolved: 4099, 
-      cities: 18,
-      trend: "+5%",
-      level: "Moderate"
-    },
-    { 
-      state: "Tamil Nadu", 
-      total: 4987, 
-      pending: 298, 
-      inProgress: 987, 
-      resolved: 3702, 
-      cities: 15,
-      trend: "+3%",
-      level: "Moderate"
-    },
-    { 
-      state: "West Bengal", 
-      total: 3456, 
-      pending: 234, 
-      inProgress: 678, 
-      resolved: 2544, 
-      cities: 11,
-      trend: "+1%",
-      level: "Low"
-    },
-    { 
-      state: "Gujarat", 
-      total: 2987, 
-      pending: 187, 
-      inProgress: 543, 
-      resolved: 2257, 
-      cities: 14,
-      trend: "+7%",
-      level: "Low"
-    }
-  ];
+interface TypeStat {
+  type: string;
+  count: number;
+  percentage: number;
+}
 
-  const cityData = [
-    { city: "New Delhi", state: "Delhi", total: 3456, resolved: 2655, efficiency: 77 },
-    { city: "Mumbai", state: "Maharashtra", total: 2890, resolved: 2256, efficiency: 78 },
-    { city: "Bangalore", state: "Karnataka", total: 2234, resolved: 1744, efficiency: 78 },
-    { city: "Chennai", state: "Tamil Nadu", total: 1876, resolved: 1464, efficiency: 78 },
-    { city: "Kolkata", state: "West Bengal", total: 1567, resolved: 1235, efficiency: 79 },
-    { city: "Pune", state: "Maharashtra", total: 1234, resolved: 987, efficiency: 80 },
-    { city: "Hyderabad", state: "Telangana", total: 1098, resolved: 876, efficiency: 80 },
-    { city: "Ahmedabad", state: "Gujarat", total: 987, resolved: 789, efficiency: 80 }
-  ];
+interface DeptStat {
+  department: string;
+  total: number;
+  resolved: number;
+  rate: number;
+}
 
-  const departmentStats = [
-    { department: "Sanitation", total: 12345, resolved: 9876, percentage: 80 },
-    { department: "Water", total: 8765, resolved: 7012, percentage: 80 },
-    { department: "Electricity", total: 6543, resolved: 5234, percentage: 80 },
-    { department: "Roads", total: 9876, resolved: 7890, percentage: 80 },
-    { department: "General Admin", total: 3456, resolved: 2768, percentage: 80 }
-  ];
+interface TrendStat {
+  week: string;
+  submitted: number;
+  resolved: number;
+}
 
-  const getEfficiencyColor = (efficiency: number) => {
-    if (efficiency >= 80) return "text-success";
-    if (efficiency >= 60) return "text-warning";
-    return "text-destructive";
-  };
+export const TransparencyDashboard = () => {
+  const [overview, setOverview] = useState<OverviewStats | null>(null);
+  const [zones, setZones] = useState<ZoneStat[]>([]);
+  const [types, setTypes] = useState<TypeStat[]>([]);
+  const [departments, setDepartments] = useState<DeptStat[]>([]);
+  const [trends, setTrends] = useState<TrendStat[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const getLevelColor = (level: string) => {
-    switch (level) {
-      case "High":
-        return "text-destructive";
-      case "Moderate":
-        return "text-warning";
-      case "Low":
-        return "text-success";
-      default:
-        return "text-muted-foreground";
+  const fetchData = async () => {
+    try {
+      const [overviewRes, zonesRes, typesRes, deptsRes, trendsRes] = await Promise.all([
+        fetch(`${API_BASE_URL}/api/stats/overview`),
+        fetch(`${API_BASE_URL}/api/stats/by-zone`),
+        fetch(`${API_BASE_URL}/api/stats/by-type`),
+        fetch(`${API_BASE_URL}/api/stats/by-department`),
+        fetch(`${API_BASE_URL}/api/stats/trends`)
+      ]);
+
+      if (overviewRes.ok) setOverview(await overviewRes.json());
+      if (zonesRes.ok) setZones(await zonesRes.json());
+      if (typesRes.ok) setTypes(await typesRes.json());
+      if (deptsRes.ok) setDepartments(await deptsRes.json());
+      if (trendsRes.ok) setTrends(await trendsRes.json());
+
+    } catch (error) {
+      console.error("Dashboard Fetch Error:", error);
+      toast.error("Failed to load real-time analytics");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchData();
+  };
+
+  const getEfficiencyColor = (rate: number) => {
+    if (rate >= 80) return "text-emerald-400";
+    if (rate >= 50) return "text-amber-400";
+    return "text-rose-400";
+  };
+
+  const getProgressColor = (rate: number) => {
+    if (rate >= 80) return "bg-emerald-500";
+    if (rate >= 50) return "bg-amber-500";
+    return "bg-rose-500";
+  };
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-100">
+        <div className="flex flex-col items-center gap-4">
+          <RefreshCw className="h-10 w-10 animate-spin text-indigo-400" />
+          <p className="text-sm font-medium animate-pulse text-slate-400">Compiling real-time registry...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted/30 py-8">
-      <div className="container mx-auto px-4">
-        <div className="space-y-8">
-          {/* Header */}
-          <div className="text-center space-y-4">
-            <div className="flex items-center justify-center space-x-2 mb-4">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-r from-primary to-gov-blue-light">
-                <Eye className="h-6 w-6 text-primary-foreground" />
-              </div>
-              <h1 className="text-3xl font-bold">Public Transparency Dashboard</h1>
-            </div>
-            <p className="text-muted-foreground max-w-3xl mx-auto">
-              Real-time insights into civic complaint resolution across India. 
-              Track government responsiveness and efficiency at national, state, and city levels.
-            </p>
-            <Badge variant="secondary" className="bg-primary/10 text-primary">
-              <Shield className="h-4 w-4 mr-2" />
-              Open Government Data Initiative
-            </Badge>
-          </div>
+    <div className="min-h-screen bg-slate-950 text-slate-100 py-8 px-4 relative">
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#0f172a_1px,transparent_1px),linear-gradient(to_bottom,#0f172a_1px,transparent_1px)] bg-[size:4rem_4rem] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_50%,#000_70%,transparent_100%)] opacity-20 pointer-events-none"></div>
 
-          {/* National Overview */}
-          <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-accent/5">
+      <div className="container mx-auto max-w-6xl relative z-10 space-y-8">
+        
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4 border-b border-slate-800 pb-6">
+          <div className="text-center md:text-left space-y-2">
+            <div className="flex items-center justify-center md:justify-start gap-2">
+              <Eye className="h-6 w-6 text-indigo-400" />
+              <h1 className="text-3xl font-extrabold bg-gradient-to-r from-blue-400 via-indigo-200 to-white bg-clip-text text-transparent">
+                Transparency Dashboard
+              </h1>
+            </div>
+            <p className="text-sm text-slate-400 max-w-xl">
+              Public registry and performance audits of civic resolution workflows.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="bg-indigo-500/5 border-indigo-500/20 text-indigo-300 py-1.5 px-3">
+              <Shield className="h-4 w-4 mr-1.5" /> RTI Open Initiative
+            </Badge>
+            <Button
+              onClick={handleRefresh}
+              disabled={refreshing}
+              size="sm"
+              variant="outline"
+              className="border-slate-800 bg-slate-900 text-slate-300 hover:text-white"
+            >
+              <RefreshCw className={`h-4 w-4 mr-1.5 ${refreshing ? "animate-spin" : ""}`} /> Refresh
+            </Button>
+          </div>
+        </div>
+
+        {/* Big Metrics Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {[
+            { label: "Total complaints", val: overview?.total || 0, icon: FolderOpen, color: "text-blue-400" },
+            { label: "Resolved cases", val: overview?.resolved || 0, icon: CheckCircle2, color: "text-emerald-400" },
+            { label: "Under investigation", val: overview?.inProgress || 0, icon: Clock, color: "text-amber-400" },
+            { label: "Unassigned/Pending", val: overview?.pending || 0, icon: AlertTriangle, color: "text-rose-400" },
+            { label: "Resolution rate", val: `${overview?.resolutionRate || 0}%`, icon: Activity, color: "text-violet-400" },
+          ].map((m, idx) => {
+            const Icon = m.icon;
+            return (
+              <Card key={idx} className="border-slate-800/80 bg-slate-900/40 backdrop-blur-md">
+                <CardContent className="p-5 flex flex-col justify-between h-full">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold">{m.label}</span>
+                    <Icon className={`h-4 w-4 ${m.color}`} />
+                  </div>
+                  <p className="text-2xl font-bold text-slate-100 mt-2">{typeof m.val === "number" ? m.val.toLocaleString() : m.val}</p>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+
+        {/* Charts & Graphs Grid */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Chart 1: Trends */}
+          <Card className="border-slate-800/80 bg-slate-900/40 backdrop-blur-md">
             <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Building className="h-5 w-5" />
-                <span>National Overview</span>
-              </CardTitle>
-              <CardDescription>
-                Nationwide civic complaint statistics and resolution metrics
-              </CardDescription>
+              <CardTitle className="text-lg font-bold text-slate-200">Incident Registration Trends</CardTitle>
+              <CardDescription className="text-xs text-slate-400">Weekly intake vs resolution throughput</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-                <div className="text-center space-y-2">
-                  <p className="text-2xl font-bold text-primary">{nationalStats.totalComplaints.toLocaleString()}</p>
-                  <p className="text-sm text-muted-foreground">Total Complaints</p>
+            <CardContent className="h-[300px] pb-6">
+              {trends.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="week" stroke="#64748b" fontSize={11} />
+                    <YAxis stroke="#64748b" fontSize={11} />
+                    <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", color: "#f1f5f9" }} />
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    <Line type="monotone" dataKey="submitted" name="Intake" stroke="#3b82f6" strokeWidth={2.5} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="resolved" name="Resolved" stroke="#10b981" strokeWidth={2.5} />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-slate-500 text-sm">
+                  Insufficient timeline logs to compile trend analysis.
                 </div>
-                <div className="text-center space-y-2">
-                  <p className="text-2xl font-bold text-success">{nationalStats.resolved.toLocaleString()}</p>
-                  <p className="text-sm text-muted-foreground">Resolved</p>
-                </div>
-                <div className="text-center space-y-2">
-                  <p className="text-2xl font-bold text-accent">{nationalStats.inProgress.toLocaleString()}</p>
-                  <p className="text-sm text-muted-foreground">In Progress</p>
-                </div>
-                <div className="text-center space-y-2">
-                  <p className="text-2xl font-bold text-warning">{nationalStats.pending.toLocaleString()}</p>
-                  <p className="text-sm text-muted-foreground">Pending</p>
-                </div>
-                <div className="text-center space-y-2">
-                  <p className="text-2xl font-bold text-primary">{nationalStats.activeStates}</p>
-                  <p className="text-sm text-muted-foreground">Active States</p>
-                </div>
-                <div className="text-center space-y-2">
-                  <p className="text-2xl font-bold text-primary">{nationalStats.activeCities}</p>
-                  <p className="text-sm text-muted-foreground">Active Cities</p>
-                </div>
-              </div>
-              
-              {/* Resolution Rate */}
-              <div className="mt-6 p-4 bg-success/10 rounded-lg text-center">
-                <p className="text-lg font-medium text-success">
-                  National Resolution Rate: {Math.round((nationalStats.resolved / nationalStats.totalComplaints) * 100)}%
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Efficiency has improved by 12% compared to last quarter
-                </p>
-              </div>
+              )}
             </CardContent>
           </Card>
 
-          {/* Main Content Tabs */}
-          <Tabs defaultValue="states" className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="states">State Performance</TabsTrigger>
-              <TabsTrigger value="cities">City Rankings</TabsTrigger>
-              <TabsTrigger value="departments">Department Efficiency</TabsTrigger>
-            </TabsList>
-
-            {/* State Performance */}
-            <TabsContent value="states" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <MapPin className="h-5 w-5" />
-                    <span>State-wise Performance</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Complaint resolution statistics across Indian states
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {stateData.map((state, index) => (
-                      <div key={index} className="border rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-3">
-                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10">
-                              <span className="font-bold text-primary">#{index + 1}</span>
-                            </div>
-                            <div>
-                              <h4 className="font-medium">{state.state}</h4>
-                              <p className="text-sm text-muted-foreground">{state.cities} active cities</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center space-x-2">
-                            <Badge variant="outline" className={getLevelColor(state.level)}>
-                              {state.level} Activity
-                            </Badge>
-                            <Badge variant="secondary" className="text-success">
-                              {state.trend}
-                            </Badge>
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                          <div className="text-center p-2 bg-muted/20 rounded">
-                            <p className="font-bold">{state.total.toLocaleString()}</p>
-                            <p className="text-xs text-muted-foreground">Total</p>
-                          </div>
-                          <div className="text-center p-2 bg-success/10 rounded">
-                            <p className="font-bold text-success">{state.resolved.toLocaleString()}</p>
-                            <p className="text-xs text-muted-foreground">Resolved</p>
-                          </div>
-                          <div className="text-center p-2 bg-accent/10 rounded">
-                            <p className="font-bold text-accent">{state.inProgress.toLocaleString()}</p>
-                            <p className="text-xs text-muted-foreground">In Progress</p>
-                          </div>
-                          <div className="text-center p-2 bg-warning/10 rounded">
-                            <p className="font-bold text-warning">{state.pending.toLocaleString()}</p>
-                            <p className="text-xs text-muted-foreground">Pending</p>
-                          </div>
-                        </div>
-
-                        {/* Progress Bar */}
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>Resolution Rate</span>
-                            <span className="font-medium">{Math.round((state.resolved / state.total) * 100)}%</span>
-                          </div>
-                          <div className="w-full bg-muted/20 rounded-full h-2">
-                            <div 
-                              className="bg-success h-2 rounded-full transition-all duration-500"
-                              style={{ width: `${(state.resolved / state.total) * 100}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* City Rankings */}
-            <TabsContent value="cities" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <TrendingUp className="h-5 w-5" />
-                    <span>Top Performing Cities</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Cities ranked by complaint resolution efficiency
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {cityData.map((city, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div className="flex items-center space-x-4">
-                          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
-                            <span className="text-sm font-bold text-primary">#{index + 1}</span>
-                          </div>
-                          <div>
-                            <h4 className="font-medium">{city.city}</h4>
-                            <p className="text-sm text-muted-foreground">{city.state}</p>
-                          </div>
-                        </div>
-                        
-                        <div className="flex items-center space-x-6">
-                          <div className="text-center">
-                            <p className="text-sm font-medium">{city.total.toLocaleString()}</p>
-                            <p className="text-xs text-muted-foreground">Total</p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-sm font-medium text-success">{city.resolved.toLocaleString()}</p>
-                            <p className="text-xs text-muted-foreground">Resolved</p>
-                          </div>
-                          <div className="text-center">
-                            <p className={`text-sm font-bold ${getEfficiencyColor(city.efficiency)}`}>
-                              {city.efficiency}%
-                            </p>
-                            <p className="text-xs text-muted-foreground">Efficiency</p>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            {/* Department Efficiency */}
-            <TabsContent value="departments" className="space-y-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <BarChart3 className="h-5 w-5" />
-                    <span>Department Performance</span>
-                  </CardTitle>
-                  <CardDescription>
-                    Efficiency metrics across different government departments
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {departmentStats.map((dept, index) => (
-                      <div key={index} className="border rounded-lg p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center space-x-3">
-                            <Building className="h-5 w-5 text-muted-foreground" />
-                            <div>
-                              <h4 className="font-medium">{dept.department}</h4>
-                              <p className="text-sm text-muted-foreground">
-                                {dept.resolved.toLocaleString()} of {dept.total.toLocaleString()} resolved
-                              </p>
-                            </div>
-                          </div>
-                          <Badge className={`${getEfficiencyColor(dept.percentage)}`} variant="outline">
-                            {dept.percentage}% Success Rate
-                          </Badge>
-                        </div>
-
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm">
-                            <span>Resolution Progress</span>
-                            <span className="font-medium">{dept.percentage}%</span>
-                          </div>
-                          <div className="w-full bg-muted/20 rounded-full h-3">
-                            <div 
-                              className="bg-gradient-to-r from-success to-accent h-3 rounded-full transition-all duration-700"
-                              style={{ width: `${dept.percentage}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-
-          {/* Footer Note */}
-          <Card className="bg-muted/20">
-            <CardContent className="p-6 text-center">
-              <p className="text-sm text-muted-foreground mb-2">
-                Data updated in real-time • Last updated: {new Date().toLocaleString()}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                This dashboard promotes transparency in government operations and citizen engagement.
-                All data is publicly accessible as part of India's Right to Information Act.
-              </p>
+          {/* Chart 2: Category Breakdown */}
+          <Card className="border-slate-800/80 bg-slate-900/40 backdrop-blur-md">
+            <CardHeader>
+              <CardTitle className="text-lg font-bold text-slate-200">Volume by Incident Type</CardTitle>
+              <CardDescription className="text-xs text-slate-400">Total reported cases segmented by category</CardDescription>
+            </CardHeader>
+            <CardContent className="h-[300px] pb-6">
+              {types.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={types} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis dataKey="type" stroke="#64748b" fontSize={11} tickFormatter={(val) => val.charAt(0).toUpperCase() + val.slice(1)} />
+                    <YAxis stroke="#64748b" fontSize={11} />
+                    <Tooltip contentStyle={{ backgroundColor: "#0f172a", borderColor: "#334155", color: "#f1f5f9" }} />
+                    <Bar dataKey="count" name="Reports" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-slate-500 text-sm">
+                  No categorical reports submitted yet.
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
+
+        {/* Tabular Lists */}
+        <Tabs defaultValue="departments" className="space-y-6">
+          <TabsList className="bg-slate-900 border border-slate-800 p-1 rounded-lg">
+            <TabsTrigger value="departments" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">Department Audit</TabsTrigger>
+            <TabsTrigger value="zones" className="data-[state=active]:bg-slate-800 data-[state=active]:text-white">Zone Registers</TabsTrigger>
+          </TabsList>
+
+          {/* Tab 1: Department Efficiency */}
+          <TabsContent value="departments">
+            <Card className="border-slate-800/80 bg-slate-900/20 backdrop-blur-md">
+              <CardHeader>
+                <CardTitle className="text-xl font-bold text-slate-200">Department Resolution Metrics</CardTitle>
+                <CardDescription className="text-xs text-slate-400">Audit of administrative response rates and efficiency quotients</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {departments.length > 0 ? (
+                  departments.map((dept, index) => (
+                    <div key={index} className="border border-slate-800 bg-slate-900/40 rounded-xl p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="space-y-1">
+                          <h4 className="font-semibold text-slate-200">{dept.department}</h4>
+                          <p className="text-xs text-slate-400">
+                            Resolved {dept.resolved.toLocaleString()} out of {dept.total.toLocaleString()} total incidents
+                          </p>
+                        </div>
+                        <Badge className={`${getEfficiencyColor(dept.rate)} bg-slate-950 border-slate-800`} variant="outline">
+                          {dept.rate}% resolution rate
+                        </Badge>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="w-full bg-slate-950 rounded-full h-2.5 overflow-hidden border border-slate-800">
+                          <div 
+                            className={`${getProgressColor(dept.rate)} h-full rounded-full transition-all duration-700`}
+                            style={{ width: `${dept.rate}%` }}
+                          ></div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="py-8 text-center text-slate-500 text-sm">
+                    No department statistics compiled.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Tab 2: Zone performance */}
+          <TabsContent value="zones">
+            <Card className="border-slate-800/80 bg-slate-900/20 backdrop-blur-md">
+              <CardHeader>
+                <CardTitle className="text-xl font-bold text-slate-200">Zone-wise Registers</CardTitle>
+                <CardDescription className="text-xs text-slate-400">Intake volumes and status distributions across wards</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {zones.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm text-left text-slate-300">
+                      <thead className="text-xs uppercase bg-slate-900 text-slate-400 border-b border-slate-800">
+                        <tr>
+                          <th className="px-6 py-3 font-semibold">Zone ID</th>
+                          <th className="px-6 py-3 font-semibold">Total Intake</th>
+                          <th className="px-6 py-3 font-semibold">Resolved</th>
+                          <th className="px-6 py-3 font-semibold">Unresolved/Pending</th>
+                          <th className="px-6 py-3 font-semibold">Audit Score</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {zones.map((z, idx) => {
+                          const rate = z.total > 0 ? Math.round((z.resolved / z.total) * 100) : 0;
+                          return (
+                            <tr key={idx} className="hover:bg-slate-900/40">
+                              <td className="px-6 py-4 font-semibold text-slate-100 flex items-center gap-1.5">
+                                <MapPin className="h-3.5 w-3.5 text-indigo-400" /> {z.zone}
+                              </td>
+                              <td className="px-6 py-4">{z.total}</td>
+                              <td className="px-6 py-4 text-emerald-400">{z.resolved}</td>
+                              <td className="px-6 py-4 text-rose-400">{z.pending}</td>
+                              <td className="px-6 py-4">
+                                <span className={`font-bold ${getEfficiencyColor(rate)}`}>
+                                  {rate}%
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="py-8 text-center text-slate-500 text-sm">
+                    No zone statistics recorded.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Footer */}
+        <Card className="bg-slate-900/20 border-slate-850">
+          <CardContent className="p-6 text-center text-xs text-slate-500 space-y-1">
+            <p>Audited in real-time by CityScan engine • Last synced: {new Date().toLocaleString()}</p>
+            <p>Data provided here is public record to support citizen audits. Safeguards are in place to mask individual user PII.</p>
+          </CardContent>
+        </Card>
+
       </div>
     </div>
   );
