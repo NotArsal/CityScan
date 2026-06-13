@@ -27,3 +27,13 @@ dist-ssr
 .env
 .env.*
 !.env.example
+
+# CityScan Local Storage & ML Services
+server/uploads/images/*
+!server/uploads/images/.gitkeep
+server/uploads/voice/*
+!server/uploads/voice/.gitkeep
+ml/weights/
+ml/__pycache__/
+ml/.venv/
+*.pyc
